@@ -1,4 +1,5 @@
 import httplib
+import inspect
 import logging
 import threading
 import pprint
@@ -106,28 +107,28 @@ class Request(object):
 
 class Recorder(object):
     """Creates a recorder
-    
+
     A Recorder instance records all httplib remote calls that originate
     under the ``caller`` provided during initialization while the
     recorder is active (has been started).
-     
+
     """
     def __init__(self, caller):
         """Create a record for the given caller"""
         self._caller = caller
         self._interaction = []
         self._current_step = None
-    
+
     def start(self):
         """Called to begin/resume a recording of an interaction"""
         callers = _registered_injections.callers
         callers[self._caller] = {'mode': 'normal', 'recorder': self}
-    
+
     def stop(self):
         """Called to stop recording an interaction"""
         if self._caller in _registered_injections.callers:
             del _registered_injections.callers[self._caller]
-    
+
     @contextmanager
     def recording(self):
         """Content manager version of start/stop"""
@@ -136,7 +137,7 @@ class Recorder(object):
             yield
         finally:
             self.stop()
-    
+
     def _record_request(self, host, method, url, body, headers):
         new_step = InteractionStep(host=host)
         new_step.request_method = method
@@ -144,12 +145,12 @@ class Recorder(object):
         new_step.request_body = body
         new_step.request_headers = headers
         self._current_step = new_step
-    
+
     def _record_response(self, http_response):
         new_step = self._current_step
         if not new_step:
             raise Exception("Called record response when no request was made.")
-        
+
         new_step.response_status = http_response.status
         new_step.response_reason = http_response.reason
         new_step.response_version = http_response.version
@@ -160,16 +161,16 @@ class Recorder(object):
         http_response.length = len(body)
         self._interaction.append(new_step)
         self._current_step = None
-    
+
     def save(self, output_dir):
         """Save the recorded http interaction session to the output
         directory"""
         if os.path.exists(output_dir) and not os.path.isdir(output_dir):
             raise Exception("Name already exists, and is not a directory.")
-        
+
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
-        
+
         module_str = ['import dalton', 'from dalton import FileWrapper', '']
         step_len = len(self._interaction)
         for step_number, step in enumerate(self._interaction):
@@ -179,7 +180,7 @@ class Recorder(object):
                 next_step = None
             module_str.append(step.serialize(step_number, next_step, output_dir))
             module_str.append('')
-        
+
         init = os.path.join(output_dir, '__init__.py')
         with open(init, 'w') as f:
             f.write('\n'.join(module_str))
@@ -188,9 +189,9 @@ class Recorder(object):
 
 class Player(object):
     """HTTP Interaction Player
-    
+
     Plays back an interaction from a dalton recording.
-    
+
     """
     def __init__(self, caller, playback_dir):
         """Create a player from the playback_dir"""
@@ -199,9 +200,8 @@ class Player(object):
         self._caller = caller
         self._module = __import__(mod_name)
         self._current_step = getattr(self._module, 'StepNumber0')
-        self._next_step = self._current_step.next_step
         self._current_request = None
-    
+
     def play(self):
         callers = _registered_injections.callers
         callers[self._caller] = {'mode': 'playback', 'playback': self}
@@ -218,7 +218,7 @@ class Player(object):
             yield
         finally:
             self.stop()
-    
+
     def request(self, method, url, body=None, headers=None):
         if not self._current_step:
             raise Exception("Playback can't handle more requests, this is "
@@ -229,7 +229,7 @@ class Player(object):
         req.body = body
         req.headers = headers
         self._current_request = req
-    
+
     def getresponse(self):
         if not self._current_step:
             raise Exception("Failed to find a step when a request was made.")
@@ -240,8 +240,10 @@ class Player(object):
 
         step = self._current_step()
         next_step, response = step.handle_request(self._current_request)
-        self._current_step = self._next_step
-        self._next_step = next_step
+        if next_step == 'None':
+            self._current_step = None
+        else:
+            self._current_step = getattr(self._module, next_step)
         return response
 
 
@@ -251,11 +253,12 @@ class DaltonHTTPResponse(object):
     def __init__(self, response=None):
         self._content = None
         self._headers = {}
-        self.msg = httplib.HTTPMessage(StringIO.StringIO())
+        self.msg = httplib.HTTPMessage(StringIO.StringIO(), 0)
         if response:
             headers = response['headers']
             for header, value in headers:
-                self.msg.addheader(header, value)
+                self.msg[header] = value
+            self.msg.fp = None
             self.status = response['status']
             self.version = response['version']
             self.reason = response['reason']
@@ -279,8 +282,13 @@ class DaltonHTTPResponse(object):
             raise httplib.ResponseNotReady()
         return self.msg.items()
 
+    def close(self):
+        pass
+
 
 def request_match(request, recorded_request_dict):
+    assert request.method == recorded_request_dict['method']
+    assert request.url == recorded_request_dict['url']
     return True
 
 
@@ -297,7 +305,7 @@ def _request(self, method, url, body=None, headers=None):
     if 'recorder' in intercept:
         intercept['recorder']._record_request(self.host, method, url, 
                                               body, headers)
-
+    
     if intercept['mode'] == 'normal':
         return self._orig_request(method, url, body, headers)
     else:
@@ -321,18 +329,13 @@ def _intercept(self):
     i_vars = _registered_injections.callers
     if not i_vars:
         return {'mode': 'normal'}
+    result = None
     
-    try:
-        raise Exception("Intentional to capture stack")
-    except:
-        pass
-    tb = sys.exc_info()[2]
-    stack = []
-    while tb:
-        stack.append(tb.tb_frame)
-        tb = tb.tb_next
-    
-    for frame in stack[::-1]:
+    cur_frame = inspect.currentframe()
+    stack = inspect.getouterframes(cur_frame)
+    for frame_record in stack:
+        frame = frame_record[0]
+        
         # Look up the stack for a variable indicating we should
         # get involved
         if 'self' not in frame.f_locals:
@@ -341,8 +344,19 @@ def _intercept(self):
         frame_self = frame.f_locals['self']
         for key in i_vars:
             if frame_self.__class__ == key or frame_self == key:
-                return i_vars[key]
-    return {'mode': 'normal'}
+                result = i_vars[key]
+                break
+
+    # Cycles can be problematic depending on Python GC mode, explicitly
+    # remove the frame references
+    del cur_frame
+    while stack:
+        frame_record = stack.pop()
+        del frame_record
+    if result:
+        return result
+    else:
+        return {'mode': 'normal'}
 
 
 ## String templates used for Python module generation
@@ -362,7 +376,7 @@ class StepNumber%(step_number)s(object):
         'reason': '%(response_reason)s',
         'version': %(response_version)s,
     }
-    next_step = %(next_step)s
+    next_step = '%(next_step)s'
     
     def handle_request(self, request):
         assert dalton.request_match(request, self.recorded_request)
