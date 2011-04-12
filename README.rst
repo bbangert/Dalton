@@ -44,8 +44,28 @@ that utilize the supported methods.
         resp = h.getresponse()
         body = resp.read()
     
-    # save the response record
+    # save the interaction
     recorder.save('google')
 
 A folder called ``google`` will be created in the current directory for use
 with dalton's playback facility.
+
+Playing it back::
+    
+    import dalton
+    dalton.inject() # monkey-patch httplib
+    
+    from httplib import HTTPConnection
+    h = HTTPConnection('www.google.com')
+    
+    # load the player
+    player = dalton.Player(caller=h, playback_dir='google')
+    
+    # run httplib calls against the player
+    with player.playing():
+        h.request('GET', '/')
+        resp = h.getresponse()
+        body = resp.read()
+    
+    # body is now the same as it was recorded, no calls to www.google.com
+    # were made
