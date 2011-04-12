@@ -69,3 +69,47 @@ Playing it back::
     
     # body is now the same as it was recorded, no calls to www.google.com
     # were made
+
+This generates a directory ``google`` with the following layout:
+    - ``__init__.py``
+    - ``step_0_response.txt``
+
+The contents of ``__init__.py`` contain the following generated playback
+information::
+    
+    import os
+    import dalton
+    from dalton import FileWrapper
+
+    here = os.path.abspath(os.path.dirname(__file__))
+
+    class StepNumber0(object):
+        recorded_request = {
+            'headers':  {},
+            'url': '/',
+            'method': 'GET',
+            'body': None,
+        }
+        recorded_response = {
+            'headers':  [('x-xss-protection', '1; mode=block'),
+                         ('transfer-encoding', 'chunked'),
+                         (                    'set-cookie',
+                                              'PREF=ID=ff; expires=Thu, 11-Apr-2013 20:19:35 GMT; path=/; domain=.google.com, NID=45=fU; expires=Wed, 12-Oct-2011 20:19:35 GMT; path=/; domain=.google.com; HttpOnly'),
+                         ('expires', '-1'),
+                         ('server', 'gws'),
+                         ('cache-control', 'private, max-age=0'),
+                         ('date', 'Tue, 12 Apr 2011 20:19:35 GMT'),
+                         ('content-type', 'text/html; charset=ISO-8859-1')],
+            'body': FileWrapper('step_0_response.txt', here),
+            'status': 200,
+            'reason': 'OK',
+            'version': 11,
+        }
+        next_step = 'None'
+
+        def handle_request(self, request):
+            assert dalton.request_match(request, self.recorded_request)
+            return (self.next_step, dalton.create_response(self.recorded_response))
+
+This file can be modified after recordings to customize the playback, add
+additional branches, etc.
