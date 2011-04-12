@@ -1,13 +1,17 @@
-from setuptools import setup, find_packages
-import sys, os
+__version__ = '0.1'
 
-version = '0.1'
+import os
+
+from setuptools import setup, find_packages
+
+here = os.path.abspath(os.path.dirname(__file__))
+README = open(os.path.join(here, 'README.rst')).read()
+
 
 setup(name='dalton',
-      version=version,
-      description="",
-      long_description="""\
-""",
+      version=__version__,
+      description="An httplib injection library for recording and playing back HTTP interactions.",
+      long_description=README,
       classifiers=[], # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
       keywords='',
       author='Ben Bangert',
