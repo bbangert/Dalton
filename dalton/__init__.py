@@ -33,22 +33,23 @@ _registered_injections = RegisteredInjections()
 
 class FileWrapper(object):
     """A file-wrapper for easy load/save of body content"""
-    def __init__(self, filename):
+    def __init__(self, filename, directory):
         self.filename = filename
+        self.directory = directory
     
-    def write(self, content, directory):
-        file_loc = os.path.join(directory, self.filename)
+    def write(self, content):
+        file_loc = os.path.join(self.directory, self.filename)
         with open(file_loc, 'w') as f:
             f.write(content)
     
-    def load(self, directory):
-        file_loc = os.path.join(directory, self.filename)
+    def load(self):
+        file_loc = os.path.join(self.directory, self.filename)
         with open(file_loc, 'r') as f:
             content = f.read()
         return content
     
     def __repr__(self):
-        return "FileWrapper('%s')" % self.filename
+        return "FileWrapper('%s', '%s')" % (self.filename, self.directory)
     __str__ = __repr__
 
 
@@ -77,12 +78,12 @@ class InteractionStep(object):
         
         request_body = self.request_body
         if request_body:
-            request_body = FileWrapper('step_%s_request.txt' % step_number)
-            request_body.write(self.request_body, output_dir)
+            request_body = FileWrapper('step_%s_request.txt' % step_number, output_dir)
+            request_body.write(self.request_body)
         response_body = self.response_body
         if response_body:
-            response_body = FileWrapper('step_%s_response.txt' % step_number)
-            response_body.write(self.response_body, output_dir)
+            response_body = FileWrapper('step_%s_response.txt' % step_number, output_dir)
+            response_body.write(self.response_body)
         data = {
             'step_number': step_number,
             'request_url': self.request_url,
@@ -99,8 +100,20 @@ class InteractionStep(object):
         return step_template % data
 
 
+class Request(object):
+    pass
+
+
 class Recorder(object):
+    """Creates a recorder
+    
+    A Recorder instance records all httplib remote calls that originate
+    under the ``caller`` provided during initialization while the
+    recorder is active (has been started).
+     
+    """
     def __init__(self, caller):
+        """Create a record for the given caller"""
         self._caller = caller
         self._interaction = []
         self._current_step = None
@@ -117,6 +130,7 @@ class Recorder(object):
     
     @contextmanager
     def recording(self):
+        """Content manager version of start/stop"""
         try:
             self.start()
             yield
@@ -148,6 +162,8 @@ class Recorder(object):
         self._current_step = None
     
     def save(self, output_dir):
+        """Save the recorded http interaction session to the output
+        directory"""
         if os.path.exists(output_dir) and not os.path.isdir(output_dir):
             raise Exception("Name already exists, and is not a directory.")
         
@@ -168,6 +184,108 @@ class Recorder(object):
         with open(init, 'w') as f:
             f.write('\n'.join(module_str))
         return True
+
+
+class Player(object):
+    """HTTP Interaction Player
+    
+    Plays back an interaction from a dalton recording.
+    
+    """
+    def __init__(self, caller, playback_dir):
+        """Create a player from the playback_dir"""
+        mod_name = playback_dir.split(os.path.sep)[-1]
+        sys.path.insert(0, playback_dir)
+        self._caller = caller
+        self._module = __import__(mod_name)
+        self._current_step = getattr(self._module, 'StepNumber0')
+        self._next_step = self._current_step.next_step
+        self._current_request = None
+    
+    def play(self):
+        callers = _registered_injections.callers
+        callers[self._caller] = {'mode': 'playback', 'playback': self}
+
+    def stop(self):
+        if self._caller in _registered_injections.callers:
+            del _registered_injections.callers[self._caller]
+
+    @contextmanager
+    def playing(self):
+        """Content manager version of start/stop"""
+        try:
+            self.play()
+            yield
+        finally:
+            self.stop()
+    
+    def request(self, method, url, body=None, headers=None):
+        if not self._current_step:
+            raise Exception("Playback can't handle more requests, this is "
+                            "the end of the chain.")
+        req = Request()
+        req.method = method
+        req.url = url
+        req.body = body
+        req.headers = headers
+        self._current_request = req
+    
+    def getresponse(self):
+        if not self._current_step:
+            raise Exception("Failed to find a step when a request was made.")
+        
+        if not self._current_request:
+            raise Exception("getresponse called during playback before "
+                            "a request was made.")
+
+        step = self._current_step()
+        next_step, response = step.handle_request(self._current_request)
+        self._current_step = self._next_step
+        self._next_step = next_step
+        return response
+
+
+## Used by generated Python modules
+
+class DaltonHTTPResponse(object):
+    def __init__(self, response=None):
+        self._content = None
+        self._headers = {}
+        self.msg = httplib.HTTPMessage(StringIO.StringIO())
+        if response:
+            headers = response['headers']
+            for header, value in headers:
+                self.msg.addheader(header, value)
+            self.status = response['status']
+            self.version = response['version']
+            self.reason = response['reason']
+            body = response['body']
+            if isinstance(body, FileWrapper):
+                body = body.load()
+            self._content = StringIO.StringIO(body)
+
+    def read(self, amt=None):
+        if self._content is None:
+            raise httplib.ResponseNotReady()
+        return self._content.read(amt)
+
+    def getheader(self, name, default=None):
+        if self.msg is None:
+            raise httplib.ResponseNotReady()
+        return self.msg.getheader(name, default)
+
+    def getheaders(self):
+        if self.msg is None:
+            raise httplib.ResponseNotReady()
+        return self.msg.items()
+
+
+def request_match(request, recorded_request_dict):
+    return True
+
+
+def create_response(response_dict):
+    return DaltonHTTPResponse(response_dict)
 
 
 ## HTTPConnection monkey-patch methods
@@ -242,7 +360,7 @@ class StepNumber%(step_number)s(object):
         'body': %(response_body)s,
         'status': %(response_status)s,
         'reason': '%(response_reason)s',
-        'version': '%(response_version)s',
+        'version': %(response_version)s,
     }
     next_step = %(next_step)s
     
