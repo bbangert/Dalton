@@ -319,6 +319,10 @@ def _getresponse(self):
         response = self._orig_getresponse()
         if 'recorder' in intercept:
             intercept['recorder']._record_response(response)
+            
+            # Ensure chunked is not set, since the StringIO replacement
+            # goofs it up
+            response.chunked = 0
         return response
     else:
         return intercept['playback'].getresponse()

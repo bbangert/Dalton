@@ -2,7 +2,7 @@
 Dalton
 ======
 
-"I want you to be nice until it's time to not be nice."
+"I want you to be nice, until it's time to not be nice."
     -- Dalton, Road-House
 
 An httplib injection library for recording and playing back HTTP interactions.
