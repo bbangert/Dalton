@@ -20,6 +20,16 @@ Monkey-patched methods of HTTPConnection:
 Using the more verbose method to send/recieve requests with HTTPConnection is
 not supported at this time.
 
+**Note:** This is a first and early release, mainly so that I could use it
+with mechanize to record/playback interactions. As mechanize only uses the
+request/getresponse API on HTTPConnection, I have no interest in adding
+intercept to the rest. Please feel free to fork this to add additional
+features as I don't plan on adding them myself (though I will happily pull bug
+fixes and feature additions with unit tests).
+
+**Warning:** Dalton uses ``inspect.currentframe`` magic to derive the caller
+which may only work on CPython (PyPy and Jython is untested).
+
 
 Example
 =======
