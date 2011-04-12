@@ -27,7 +27,8 @@ Example
 Since dalton monkey-patches httplib, no modification is necessary of libraries
 that utilize the supported methods.
 
-::
+.. code-block:: python
+
     import dalton
     dalton.inject() # monkey-patch httplib
     
