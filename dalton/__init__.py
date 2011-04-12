@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 log = logging.getLogger(__name__)
 
-__all__ = ['inject', 'Recorder']
+__all__ = ['inject', 'Recorder', 'Player', 'FileWrapper']
 
 
 def inject():
@@ -50,7 +50,7 @@ class FileWrapper(object):
         return content
     
     def __repr__(self):
-        return "FileWrapper('%s', '%s')" % (self.filename, self.directory)
+        return "FileWrapper('%s', here)" % self.filename
     __str__ = __repr__
 
 
@@ -171,7 +171,10 @@ class Recorder(object):
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
 
-        module_str = ['import dalton', 'from dalton import FileWrapper', '']
+        module_str = [
+            'import os', 'import dalton', 'from dalton import FileWrapper', '',
+            'here = os.path.abspath(os.path.dirname(__file__))', ''
+        ]
         step_len = len(self._interaction)
         for step_number, step in enumerate(self._interaction):
             if step_number + 1 < step_len:
@@ -196,7 +199,8 @@ class Player(object):
     def __init__(self, caller, playback_dir):
         """Create a player from the playback_dir"""
         mod_name = playback_dir.split(os.path.sep)[-1]
-        sys.path.insert(0, playback_dir)
+        container_dir = playback_dir.split(os.path.sep)[:-1]
+        sys.path.insert(0, os.path.sep.join(container_dir))
         self._caller = caller
         self._module = __import__(mod_name)
         self._current_step = getattr(self._module, 'StepNumber0')
