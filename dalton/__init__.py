@@ -28,6 +28,7 @@ class RegisteredInjections(threading.local):
     def __init__(self):
         threading.local.__init__(self)
         self.callers = {}
+        self._global = False
 
 _registered_injections = RegisteredInjections()
 
@@ -113,21 +114,30 @@ class Recorder(object):
     recorder is active (has been started).
 
     """
-    def __init__(self, caller):
+    def __init__(self, caller=None, use_global=False):
         """Create a record for the given caller"""
         self._caller = caller
+        self._global = use_global
         self._interaction = []
         self._current_step = None
 
     def start(self):
         """Called to begin/resume a recording of an interaction"""
         callers = _registered_injections.callers
-        callers[self._caller] = {'mode': 'normal', 'recorder': self}
+        if self._global:
+            callers['_global'] = {'mode': 'normal', 'recorder': self}
+        else:
+            callers[self._caller] = {'mode': 'normal', 'recorder': self}
+        self._orig_global = _registered_injections._global
+        _registered_injections._global = self._global
 
     def stop(self):
         """Called to stop recording an interaction"""
-        if self._caller in _registered_injections.callers:
+        if self._global and '_global' in _registered_injections.callers:
+            del _registered_injections.callers['_global']
+        elif self._caller in _registered_injections.callers:
             del _registered_injections.callers[self._caller]
+        _registered_injections._global = self._orig_global
 
     @contextmanager
     def recording(self):
@@ -196,23 +206,32 @@ class Player(object):
     Plays back an interaction from a dalton recording.
 
     """
-    def __init__(self, caller, playback_dir):
+    def __init__(self, playback_dir, caller=None, use_global=False):
         """Create a player from the playback_dir"""
         mod_name = playback_dir.split(os.path.sep)[-1]
         container_dir = playback_dir.split(os.path.sep)[:-1]
         sys.path.insert(0, os.path.sep.join(container_dir))
         self._caller = caller
+        self._global = use_global
         self._module = __import__(mod_name)
         self._current_step = getattr(self._module, 'StepNumber0')
         self._current_request = None
 
     def play(self):
         callers = _registered_injections.callers
-        callers[self._caller] = {'mode': 'playback', 'playback': self}
+        if self._global:
+            callers['_global'] = {'mode': 'playback', 'playback': self}
+        else:
+            callers[self._caller] = {'mode': 'playback', 'playback': self}
+        self._orig_global = _registered_injections._global
+        _registered_injections._global = self._global
 
     def stop(self):
-        if self._caller in _registered_injections.callers:
+        if self._global and '_global' in _registered_injections.callers:
+            del _registered_injections.callers['_global']
+        elif self._caller in _registered_injections.callers:
             del _registered_injections.callers[self._caller]
+        _registered_injections._global = self._orig_global
 
     @contextmanager
     def playing(self):
@@ -337,6 +356,9 @@ def _intercept(self):
     i_vars = _registered_injections.callers
     if not i_vars:
         return {'mode': 'normal'}
+    if _registered_injections._global:
+        return _registered_injections.callers['_global']
+    
     result = None
     
     cur_frame = inspect.currentframe()
