@@ -123,3 +123,12 @@ information::
 
 This file can be modified after recordings to customize the playback, add
 additional branches, etc.
+
+Support
+=======
+
+Dalton is considered feature-complete as the project owner (Ben Bangert) has
+no additional functionality or development beyond bug fixes planned. Bugs can
+be filed on github, should be accompanied by a test case to retain current
+code coverage, and should be in a Pull request when ready to be accepted into
+the Dalton code-base.

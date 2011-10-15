@@ -1,4 +1,4 @@
-__version__ = '0.2'
+__version__ = '1.0'
 
 import os
 
@@ -13,13 +13,12 @@ setup(name='dalton',
       description="An httplib injection library for recording and playing back HTTP interactions.",
       long_description=README,
       classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Software Development :: Testing",
-        "Topic :: Software Development :: Testing :: Traffic Generation",
-      ], # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
+      ],
       keywords='mechanize httplib crawling mock test',
       author='Ben Bangert',
       author_email='ben@groovie.org',

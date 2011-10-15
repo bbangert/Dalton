@@ -1,3 +1,7 @@
+1.0 (October 15, 2011)
+----------------------
+- Updated to 1.0 to reflect lack of bugs thus far and feature-completeness.
+
 0.2 (May 10th, 2011)
 --------------------
 - Add use_global option for recorder/player for cheaper intercept without
