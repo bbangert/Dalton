@@ -10,3 +10,5 @@
 nosetests.xml
 build/
 dist/
+dalton/tests/test_recordings/google_test/
+dalton/tests/test_recordings/empty_test/
