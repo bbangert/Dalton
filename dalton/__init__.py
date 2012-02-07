@@ -214,7 +214,7 @@ class Player(object):
         self._caller = caller
         self._global = use_global
         self._module = __import__(mod_name)
-        self._current_step = getattr(self._module, 'StepNumber0')
+        self._current_step = getattr(self._module, 'StepNumber0', None)
         self._current_request = None
 
     def play(self):

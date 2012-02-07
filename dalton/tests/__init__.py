@@ -41,6 +41,15 @@ class TestRecorder(unittest.TestCase):
         assert os.path.exists(os.path.join(test_dir, '__init__.py'))
         assert os.path.exists(os.path.join(test_dir, 'step_1_request.txt'))
 
+    def testEmptySave(self):
+        h = self._makeHttp('www.google.com')
+        recorder = dalton.Recorder(caller=h)
+        with recorder.recording():
+            pass # does not do any request
+        assert len(recorder._interaction) == 0
+        test_dir = os.path.join(here, 'test_recordings', 'empty_test')
+        recorder.save(test_dir)
+
 
 class TestGlobalRecorder(unittest.TestCase):
     def _makeHttp(self, host):
@@ -96,6 +105,16 @@ class TestPlayer(unittest.TestCase):
         assert '<title>GoogleFoo</title>' in body
         assert resp.getheader('x-xss-protection') == '1; mode=block'
         assert len(resp.getheaders()) == 8
+
+    def testEmptyPlay(self):
+        h = self._makeHttp('www.google.com')
+        test_dir = os.path.join(here, 'test_recordings', 'empty_play_test')
+        player = dalton.Player(caller=h, playback_dir=test_dir)
+
+        with player.playing(): # shouldn't crash here
+            with self.assertRaises(Exception):
+                h.request('GET', '/')
+
 
 
 class TestGlobalPlayer(unittest.TestCase):
