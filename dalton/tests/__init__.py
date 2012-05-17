@@ -6,6 +6,25 @@ dalton.inject()
 
 here = os.path.abspath(os.path.dirname(__file__))
 
+class TestInject(unittest.TestCase):
+    def _makeHttp(self, host):
+        from httplib import HTTPConnection
+        return HTTPConnection(host)
+
+    def testPlainRequest(self):
+        """Test to make sure that plain, untampered-with requests still work."""
+        h = self._makeHttp('www.google.com')
+        h.request('GET', '/')
+        resp = h.getresponse()
+        body = resp.read()
+
+    def testDoubleInject(self):
+        """Test to ensure that inject()ing twice doesn't cause trouble."""
+        dalton.inject()
+        h = self._makeHttp('www.google.com')
+        h.request('GET', '/')
+        resp = h.getresponse()
+        body = resp.read()
 
 class TestRecorder(unittest.TestCase):
     def _makeHttp(self, host):
