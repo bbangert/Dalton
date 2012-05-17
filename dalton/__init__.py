@@ -15,11 +15,12 @@ __all__ = ['inject', 'Recorder', 'Player', 'FileWrapper']
 
 def inject():
     """Monkey-patch httplib with Dalton"""
-    httplib.HTTPConnection._orig_request = httplib.HTTPConnection.request
-    httplib.HTTPConnection._orig_getresponse = httplib.HTTPConnection.getresponse
-    httplib.HTTPConnection.request = _request
-    httplib.HTTPConnection.getresponse = _getresponse
-    httplib.HTTPConnection._intercept = _intercept
+    if not hasattr(httplib.HTTPConnection, '_orig_request'):
+        httplib.HTTPConnection._orig_request = httplib.HTTPConnection.request
+        httplib.HTTPConnection._orig_getresponse = httplib.HTTPConnection.getresponse
+        httplib.HTTPConnection.request = _request
+        httplib.HTTPConnection.getresponse = _getresponse
+        httplib.HTTPConnection._intercept = _intercept
 
 
 class RegisteredInjections(threading.local):
